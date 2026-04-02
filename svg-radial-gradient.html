@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>彩虹光束 · 细→粗 + 起点上移 + 透明度</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+        }
+        #container {
+            position: relative;
+            width: 1350px;
+            height: 800px;
+            margin: 0 auto;
+        }
+        svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        #background { z-index: 0; }
+        #rays       { z-index: 1; }
+        #triangle   { z-index: 10; pointer-events: none; }
+    </style>
+</head>
+<body>
+<div id="container">
+    <svg id="background" viewBox="0 0 1350 800" preserveAspectRatio="xMidYMid slice"></svg>
+    <svg id="rays" viewBox="0 0 1350 800" preserveAspectRatio="xMidYMid slice"></svg>
+    <svg id="triangle" viewBox="0 0 1350 800" preserveAspectRatio="xMidYMid slice"></svg>
+</div>
+
+<script>
+(function() {
+    const WIDTH  = 1350;
+    const HEIGHT = 800;
+
+    const TOTAL_RAINBOW_RAYS = 700;
+    const RAY_THICKNESS      = 0.5;
+    const RAY_OPACITY        = 0.58;
+    const RAY_FADE_LENGTH    = 0.82;
+
+    const TRIANGLE_SCALE     = 0.30;
+    const WHITE_RAYS_COUNT   = 46;
+    const WHITE_RAY_THICK    = 1.0;
+    const FADE_START_INDEX   = WHITE_RAYS_COUNT - 46;
+
+    const TRIANGLE_DOWN_SHIFT = 120;
+    const GRID_SPACING       = 80;
+
+    const RAY_START_SHIFT = 40;
+
+    const WIDTH_MULTIPLIER = 6.0;
+
+    const cx = WIDTH / 2;
+    const cy = HEIGHT / 2 + TRIANGLE_DOWN_SHIFT;
+
+    const triBase = Math.min(WIDTH, HEIGHT) * TRIANGLE_SCALE;
+    const triH    = (Math.sqrt(3) / 2) * triBase;
+
+    const apexX   = cx;
+    const apexY   = cy - triH * (2 / 3);
+    const leftX   = cx - triBase / 2;
+    const leftY   = cy + triH * (1 / 3);
+    const rightX  = cx + triBase / 2;
+    const rightY  = cy + triH * (1 / 3);
+    const medianX = cx;
+
+    const maxWhiteY = apexY + triH * (9 / 10);
+
+    const bgSvg = document.getElementById("background");
+    const svgNS = "http://www.w3.org/2000/svg";
+
+    for (let y = 0; y <= HEIGHT; y += GRID_SPACING) {
+        const line = document.createElementNS(svgNS, "line");
+        line.setAttribute("x1", 0);
+        line.setAttribute("y1", y);
+        line.setAttribute("x2", WIDTH);
+        line.setAttribute("y2", y);
+        line.setAttribute("stroke", "#333");
+        line.setAttribute("stroke-width", 1);
+        bgSvg.appendChild(line);
+    }
+    for (let x = 0; x <= WIDTH; x += GRID_SPACING) {
+        const line = document.createElementNS(svgNS, "line");
+        line.setAttribute("x1", x);
+        line.setAttribute("y1", 0);
+        line.setAttribute("x2", x);
+        line.setAttribute("y2", HEIGHT);
+        line.setAttribute("stroke", "#333");
+        line.setAttribute("stroke-width", 1);
+        bgSvg.appendChild(line);
+    }
+
+    const raysSvg = document.getElementById("rays");
+    while (raysSvg.firstChild) raysSvg.removeChild(raysSvg.firstChild);
+    const defs = document.createElementNS(svgNS, "defs");
+    raysSvg.appendChild(defs);
+
+    const colors = [
+        [255, 40, 40], [255, 140, 20], [255, 220, 60],
+        [80, 220, 80], [20, 220, 220], [60, 120, 255], [200, 60, 255]
+    ];
+
+    const angleStep = 360 / TOTAL_RAINBOW_RAYS;
+    const radius = Math.max(WIDTH, HEIGHT) * 1.25;
+
+    const startX = cx;
+    const startY = cy - RAY_START_SHIFT;
+
+    for (let i = 0; i < TOTAL_RAINBOW_RAYS; i++) {
+        let angleDeg = (i * angleStep - 90);
+        angleDeg = ((angleDeg % 360) + 360) % 360;
+
+        const angle = angleDeg * Math.PI / 180;
+        const ex = cx + radius * Math.cos(angle);
+        const ey = cy + radius * Math.sin(angle);
+
+        const dx = ex - startX;
+        const dy = ey - startY;
+        const totalDist = Math.hypot(dx, dy);
+
+        const t = (i / TOTAL_RAINBOW_RAYS) * colors.length;
+        const idx1 = Math.floor(t) % colors.length;
+        const idx2 = (idx1 + 1) % colors.length;
+        const frac = t - Math.floor(t);
+
+        const c1 = colors[idx1];
+        const c2 = colors[idx2];
+
+        const r = Math.round(c1[0] + (c2[0] - c1[0]) * frac);
+        const g = Math.round(c1[1] + (c2[1] - c1[1]) * frac);
+        const b = Math.round(c1[2] + (c2[2] - c1[2]) * frac);
+
+        const startThick = RAY_THICKNESS;
+        const endThick = RAY_THICKNESS * WIDTH_MULTIPLIER;
+
+        const len = Math.hypot(dx, dy);
+        if (len < 1e-6) continue;
+        const ux = dx / len;
+        const uy = dy / len;
+        const perpX = -uy;
+        const perpY = ux;
+
+        const offStartX = perpX * (startThick / 2);
+        const offStartY = perpY * (startThick / 2);
+
+        const offEndX = perpX * (endThick / 2);
+        const offEndY = perpY * (endThick / 2);
+
+        const p1x = startX - offStartX;
+        const p1y = startY - offStartY;
+        const p2x = startX + offStartX;
+        const p2y = startY + offStartY;
+        const p3x = ex + offEndX;
+        const p3y = ey + offEndY;
+        const p4x = ex - offEndX;
+        const p4y = ey - offEndY;
+
+        const path = document.createElementNS(svgNS, "path");
+
+        const d = `M ${p1x},${p1y} L ${p2x},${p2y} L ${p3x},${p3y} L ${p4x},${p4y} Z`;
+        path.setAttribute("d", d);
+
+        const gradId = `grad_${i}`;
+        const grad = document.createElementNS(svgNS, "linearGradient");
+        grad.setAttribute("id", gradId);
+        grad.setAttribute("gradientUnits", "userSpaceOnUse");
+        grad.setAttribute("x1", startX);
+        grad.setAttribute("y1", startY);
+        grad.setAttribute("x2", ex);
+        grad.setAttribute("y2", ey);
+
+        const stop0 = document.createElementNS(svgNS, "stop");
+        stop0.setAttribute("offset", "0%");
+        stop0.setAttribute("stop-color", `rgb(${r},${g},${b})`);
+        stop0.setAttribute("stop-opacity", "1.0");
+        grad.appendChild(stop0);
+
+        const stopMid = document.createElementNS(svgNS, "stop");
+        stopMid.setAttribute("offset", `${RAY_FADE_LENGTH * 100}%`);
+        stopMid.setAttribute("stop-color", `rgb(${r},${g},${b})`);
+        stopMid.setAttribute("stop-opacity", "1.0");
+        grad.appendChild(stopMid);
+
+        const stopEnd = document.createElementNS(svgNS, "stop");
+        stopEnd.setAttribute("offset", "100%");
+        stopEnd.setAttribute("stop-color", `rgb(${r},${g},${b})`);
+        stopEnd.setAttribute("stop-opacity", "0");
+        grad.appendChild(stopEnd);
+
+        defs.appendChild(grad);
+
+        path.setAttribute("fill", `url(#${gradId})`);
+        path.setAttribute("opacity", RAY_OPACITY);
+        path.setAttribute("stroke", "none");
+
+        raysSvg.appendChild(path);
+    }
+
+    const triSvg = document.getElementById("triangle");
+    while (triSvg.firstChild) triSvg.removeChild(triSvg.firstChild);
+
+    const poly = document.createElementNS(svgNS, "polygon");
+    poly.setAttribute("points", `${apexX},${apexY} ${leftX},${leftY} ${rightX},${rightY}`);
+    poly.setAttribute("fill", "black");
+    triSvg.appendChild(poly);
+
+    const whiteSpacing = (maxWhiteY - apexY) / (WHITE_RAYS_COUNT - 1 || 1);
+
+    for (let i = 0; i < WHITE_RAYS_COUNT; i++) {
+        const y = apexY + i * whiteSpacing;
+
+        let opacity = 1;
+        let colorR = 255, colorG = 255, colorB = 255;
+
+        if (i >= FADE_START_INDEX) {
+            const steps = WHITE_RAYS_COUNT - FADE_START_INDEX;
+            const pos = (i - FADE_START_INDEX) / (steps - 1 || 1);
+            opacity = 1 - pos;
+            colorR = colorG = colorB = Math.round(255 * (1 - pos));
+        }
+
+        const col = `rgba(${colorR},${colorG},${colorB},${opacity.toFixed(3)})`;
+
+        const l = document.createElementNS(svgNS, "line");
+        l.setAttribute("x1", leftX);
+        l.setAttribute("y1", leftY);
+        l.setAttribute("x2", medianX);
+        l.setAttribute("y2", y);
+        l.setAttribute("stroke", col);
+        l.setAttribute("stroke-width", WHITE_RAY_THICK);
+        l.setAttribute("stroke-linecap", "round");
+        triSvg.appendChild(l);
+
+        const r = document.createElementNS(svgNS, "line");
+        r.setAttribute("x1", rightX);
+        r.setAttribute("y1", rightY);
+        r.setAttribute("x2", medianX);
+        r.setAttribute("y2", y);
+        r.setAttribute("stroke", col);
+        r.setAttribute("stroke-width", WHITE_RAY_THICK);
+        r.setAttribute("stroke-linecap", "round");
+        triSvg.appendChild(r);
+    }
+})();
+</script>
+</div>
+</body>
+</html>
